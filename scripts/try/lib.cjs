@@ -22,7 +22,7 @@ let failed = 0;
 const home = require('fs').mkdtempSync(path.join(require('os').tmpdir(), 'p2p-try-'));
 
 function run(cmd, args, onLine) {
-  const kid = spawn(cmd, args, { cwd: root, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, XDG_CONFIG_HOME: home } });
+  const kid = spawn(cmd, args, { cwd: root, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, XDG_CONFIG_HOME: home, P2P_NO_OPEN: '1' } });
   kids.push(kid);
   for (const s of [kid.stdout, kid.stderr]) {
     let rest = '';

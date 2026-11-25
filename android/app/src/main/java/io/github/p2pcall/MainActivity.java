@@ -328,6 +328,11 @@ public class MainActivity extends Activity {
      * in the browser: installing is the person's own tap, as Android demands.
      */
     private void checkForUpdate() {
+        // Asked again whenever the app comes back to the front, but not more
+        // often than every ten minutes: GitHub lets a phone ask 60 times an hour.
+        long now = android.os.SystemClock.elapsedRealtime();
+        if (lastUpdateCheck != 0 && now - lastUpdateCheck < 10 * 60 * 1000) return;
+        lastUpdateCheck = now;
         new Thread(() -> {
             try {
                 java.net.HttpURLConnection c = (java.net.HttpURLConnection) new java.net.URL(LATEST).openConnection();
@@ -499,6 +504,7 @@ public class MainActivity extends Activity {
     private static final String[] TUNNEL_SHORT = {"auto", "localhost.run", "serveo"};
     private TextView how;         // the line under the button: how, and by which tunnel
     private String newVersion;    // a newer release to offer, if there is one
+    private long lastUpdateCheck; // when GitHub was last asked (elapsedRealtime), 0 = never
 
     private int modeNow() {
         String m = getSharedPreferences("p2pcall", MODE_PRIVATE).getString("mode", MODES[0]);
@@ -980,6 +986,7 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         errand = false;
+        if (update != null) checkForUpdate();
     }
 
     /**
