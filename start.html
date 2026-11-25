@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="referrer" content="no-referrer">
+<title>Voice call</title>
+<style>
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body {
+    margin: 0; min-height: 100vh; display: grid; place-items: center;
+    background: #16161f; color: #ececf1;
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { width: 100%; max-width: 420px; min-height: 100vh; padding: 24px; display: flex; flex-direction: column; align-items: center; text-align: center; }
+  .logo { width: 84px; height: 84px; margin: 12vh 0 18px; border-radius: 50%; background: #1f8a5b; display: grid; place-items: center; font-size: 38px; }
+  h1 { font-size: 1.6em; margin: 0 0 4px; }
+  p { color: #9a9ab0; margin: 0; }
+  .small { font-size: .9em; }
+  #message { min-height: 1.5em; margin: 14px 0 10px; }
+  #message.error { color: #e5534b; }
+  button {
+    font: inherit; font-weight: 600; padding: 11px 26px; cursor: pointer;
+    color: #ececf1; background: #22222e; border: 1px solid #33334a; border-radius: 12px;
+  }
+  button:disabled { opacity: .5; cursor: default; }
+  button.blue { color: #fff; background: #3b82f6; border-color: #3b82f6; }
+  button.green { color: #fff; background: #1f8a5b; border-color: #1f8a5b; }
+  button.danger { color: #e5534b; background: none; border-color: #e5534b; }
+  button.danger.sure { color: #fff; background: #e5534b; }
+  button.link { padding: 0; font-weight: 400; color: #3b82f6; background: none; border: 0; }
+  button.quiet { padding: 6px 4px; font-weight: 400; color: #9a9ab0; background: none; border: 0; }
+  #how { margin: 12px 0 22px; }
+  .foot { margin-top: auto; padding-top: 28px; width: 100%; display: flex; justify-content: space-between; align-items: center; color: #9a9ab0; font-size: .9em; }
+  a { color: #3b82f6; }
+  .update { display: block; margin: 0 0 14px; padding: 10px 14px; border-radius: 10px; background: #1f8a5b; color: #fff; text-decoration: none; font-weight: 600; }
+
+  /* What opens over the page: how to begin, somebody else's call, the settings. */
+  .over { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px; background: rgba(5, 5, 10, .6); }
+  .box { width: 100%; max-width: 420px; max-height: 100%; overflow-y: auto; padding: 16px; display: grid; gap: 10px; text-align: left; background: #22222e; border: 1px solid #33334a; border-radius: 16px; }
+  .box > * { min-width: 0; }
+  .head { display: flex; justify-content: space-between; align-items: center; font-weight: 600; font-size: 1.05em; }
+  label.opt { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid #33334a; border-radius: 12px; cursor: pointer; }
+  label.opt:has(input:checked) { border-color: #3b82f6; }
+  label.opt input { margin-top: 5px; accent-color: #3b82f6; }
+  label.opt b { display: block; }
+  label.opt span { color: #9a9ab0; font-size: .88em; }
+  .line { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  input[type=text], select {
+    width: 100%; padding: 11px 13px; font: inherit;
+    color: #ececf1; background: #16161f; border: 1px solid #33334a; border-radius: 10px;
+  }
+  .line select { width: auto; max-width: 60%; }
+  .row { display: flex; gap: 10px; }
+  .row button { flex: 1; padding-left: 8px; padding-right: 8px; }
+  .part { display: grid; gap: 8px; padding: 12px; border: 1px solid #33334a; border-radius: 12px; }
+</style>
+</head>
+<body>
+<!-- The program's start page on a computer: the same choice the Android app
+     gives. It is served to this device only. -->
+<main>
+  <div class="logo">📞</div>
+  <h1>Voice call</h1>
+  <p>Straight between friends, no third-party servers</p>
+  <p id="message"></p>
+  <a id="update" class="update" target="_blank" rel="noopener" hidden></a>
+
+  <button id="create" class="blue">Start call</button>
+  <p id="how" class="small"><span id="howText"></span> · <button id="howBtn" class="link">change</button></p>
+  <button id="other">Join a call</button>
+
+  <div class="foot">
+    <button id="setBtn" class="quiet">⚙ Settings</button>
+    <span id="version"></span>
+  </div>
+</main>
+
+<!-- How the call is begun: remembered for the next time. -->
+<div id="howBox" class="over" hidden>
+  <div class="box">
+    <div class="head"><span>How to start the call</span><button class="quiet" data-shut>✕</button></div>
+    <label class="opt"><input type="radio" name="mode" value="permanent"><div><b>Permanent link</b><span>The same link every time. Friends don't need to install anything.</span></div></label>
+    <label class="opt"><input type="radio" name="mode" value="once"><div><b>One-time</b><span>A random link that stops working after the call.</span></div></label>
+    <label class="opt"><input type="radio" name="mode" value="direct"><div><b>Direct link</b><span>Tunnel only, no site or boards. The link changes if the tunnel reconnects.</span></div></label>
+    <label class="opt"><input type="radio" name="mode" value="bare"><div><b>No tunnel</b><span>The call is created on a page in your browser; this program isn't involved.</span></div></label>
+    <div id="tunnelLine" class="line">
+      <span>Tunnel</span>
+      <select id="tunnel">
+        <option value="auto">Auto</option>
+        <option value="localhostrun">localhost.run</option>
+        <option value="serveo">serveo.net</option>
+        <option value="cloudflare">Cloudflare</option>
+      </select>
+    </div>
+    <p id="tunnelNote" class="small"></p>
+  </div>
+</div>
+
+<!-- Somebody else's call, by its link. -->
+<div id="otherBox" class="over" hidden>
+  <div class="box">
+    <div class="head"><span>Join a call</span><button class="quiet" data-shut>✕</button></div>
+    <input id="link" type="text" placeholder="Call link" autocomplete="off" spellcheck="false">
+    <div class="row">
+      <button id="paste">Paste</button>
+      <button id="enter" class="green">Join</button>
+    </div>
+    <p id="otherNote" class="small">You don't need the program for this: you can just open the link in a browser.</p>
+  </div>
+</div>
+
+<div id="setBox" class="over" hidden>
+  <div class="box">
+    <div class="head"><span>⚙ Settings</span><button class="quiet" data-shut>✕</button></div>
+    <div class="part">
+      <b>Preferred tunnel</b>
+      <select id="tunnel2">
+        <option value="auto">Auto: localhost.run, then serveo, then Cloudflare</option>
+        <option value="localhostrun">localhost.run only</option>
+        <option value="serveo">serveo.net only</option>
+        <option value="cloudflare">Cloudflare only</option>
+      </select>
+      <p class="small">The tunnel gives the call an address on the internet; the conversation doesn't go through it.
+        localhost.run has no extra pages but is slow: with a direct link, the page takes about ten seconds to open
+        for your friend. serveo is fast, but with a direct link your friend first has to click "Continue to Site".
+        Cloudflare downloads its own program (~40 MB) and doesn't work on every network.</p>
+    </div>
+    <div class="part">
+      <b>My permanent link</b>
+      <p class="small">The old link will stop working for everyone who has it.</p>
+      <button id="newLink" class="danger">Change my link</button>
+      <p id="newLinkNote" class="small"></p>
+    </div>
+    <div class="part">
+      <b>Program</b>
+      <p class="small">Runs without a window of its own. Quits by itself when this page is closed (after three minutes)
+        or when the page of a started call is closed (after a minute and a half).</p>
+      <button id="quit">Quit</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+const $ = (id) => document.getElementById(id);
+const token = new URLSearchParams(location.search).get('t') || '';
+const ask = async (what, more = '') => (await fetch(`/${what}?t=${encodeURIComponent(token)}${more}`, { method: 'POST', cache: 'no-store' })).json();
+const say = (text, error) => {
+  $('message').textContent = text;
+  $('message').className = error ? 'error' : '';
+};
+
+// What opens over the page closes by its cross, a click beside it, or Esc.
+const shut = () => { for (const b of document.querySelectorAll('.over')) b.hidden = true; };
+for (const box of document.querySelectorAll('.over')) {
+  box.addEventListener('click', (e) => { if (e.target === box || e.target.hasAttribute('data-shut')) shut(); });
+}
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') shut(); });
+$('howBtn').onclick = () => { $('howBox').hidden = false; };
+$('setBtn').onclick = () => { $('setBox').hidden = false; };
+$('other').onclick = () => { $('otherBox').hidden = false; $('link').focus(); };
+
+// A newer release, if there is one: the link downloads the file for this system.
+ask('update').then((u) => {
+  $('version').textContent = u.version && u.version !== 'dev' ? 'Version ' + u.version.replace(/^v/, '') : '';
+  if (!u.latest) return;
+  $('update').textContent = `New version available (${u.latest.replace(/^v/, '')}) — download`;
+  $('update').href = u.url;
+  $('update').hidden = false;
+}).catch(() => {});
+
+// While this page is open the program stays; closed, with no call created,
+// the program quits by itself.
+let quitted = false;
+setInterval(() => { if (!quitted) ask('alive').catch(() => say('The program has quit. Start it again.', true)); }, 20000);
+
+// How the call is begun, and by which tunnel: both kept by the program for
+// the next time (this page's own memory doesn't last: its address is new
+// every time).
+const MODES = { permanent: 'Permanent link', once: 'One-time', direct: 'Direct link', bare: 'No tunnel' };
+const TUNNELS = { auto: 'auto', localhostrun: 'localhost.run', serveo: 'serveo', cloudflare: 'Cloudflare' };
+let mode = 'permanent', tunnel = 'auto', tunnelFixed = false;
+function showHow() {
+  for (const r of document.querySelectorAll('input[name=mode]')) r.checked = r.value === mode;
+  $('tunnel').value = $('tunnel2').value = tunnel;
+  $('tunnel').disabled = $('tunnel2').disabled = tunnelFixed;
+  $('tunnelLine').hidden = mode === 'bare';
+  $('howText').textContent = MODES[mode] + (mode === 'bare' ? '' : ' · tunnel ' + (tunnelFixed ? 'set at launch' : TUNNELS[tunnel]));
+}
+ask('mode').then((r) => { if (MODES[r.mode]) mode = r.mode; showHow(); }).catch(() => {});
+ask('tunnel').then((r) => {
+  if (TUNNELS[r.tunnel]) tunnel = r.tunnel;
+  tunnelFixed = !!r.fixed;
+  if (tunnelFixed) $('tunnelNote').textContent = 'The tunnel was set when the program was started (-tunnel), so the choice here has no effect.';
+  showHow();
+}).catch(() => {});
+showHow();
+for (const r of document.querySelectorAll('input[name=mode]')) {
+  r.onchange = () => {
+    mode = r.value;
+    showHow();
+    ask('mode', '&save=' + mode).catch(() => {});
+  };
+}
+for (const id of ['tunnel', 'tunnel2']) {
+  $(id).onchange = async () => {
+    tunnel = $(id).value;
+    showHow();
+    try {
+      const r = await ask('tunnel', '&save=' + encodeURIComponent(tunnel));
+      if (r.error) say('Tunnel not saved: ' + r.error, true);
+    } catch {
+      say('The program isn\'t responding. Start it again.', true);
+    }
+  };
+}
+
+$('create').onclick = async () => {
+  // With no tunnel the call is made on the site's page, and this program has no part in it.
+  if (mode === 'bare') return location.assign('{{SITE}}#create');
+  $('create').disabled = true;
+  say('Starting the call…');
+  try {
+    const r = await ask('create', mode === 'once' ? '&once=1' : mode === 'direct' ? '&direct=1' : '');
+    if (r.url) return location.assign(r.url);
+    say('Couldn\'t start the call: ' + r.error, true);
+  } catch {
+    say('The program isn\'t responding. Start it again.', true);
+  }
+  $('create').disabled = false;
+};
+
+// A link to a call on the site (name.secret, or name~secret for a call with
+// no program), or a link straight to somebody's tunnel (#r=name&k=secret).
+const SITE = '{{SITE}}'.replace(/^https:\/\//, '').replace(/\/$/, '').replace(/[.\\/]/g, '\\$&');
+const CALL_LINK = new RegExp('https://(' + SITE + '/?#[A-Za-z0-9_-]{22}(\\.[A-Za-z0-9_-]{22}|~[A-Za-z0-9_-]{22}(~[a-z0-9]{1,12})?)'
+  + '|[a-z0-9.-]+(:\\d+)?/?#r=[A-Za-z0-9_-]{22}&k=[A-Za-z0-9_-]{22})', 'i');
+const note = (text) => { $('otherNote').textContent = text; $('otherNote').style.color = '#e5534b'; };
+function enter() {
+  // The link may come with words around it ("Join the call: https://…").
+  const m = CALL_LINK.exec($('link').value);
+  if (!m) return note($('link').value.trim() ? 'That doesn\'t look like a call link.' : 'Paste a call link and press "Join".');
+  location.assign(m[0]);
+}
+$('enter').onclick = enter;
+$('link').onkeydown = (e) => { if (e.key === 'Enter') enter(); };
+$('paste').onclick = async () => {
+  try {
+    $('link').value = (await navigator.clipboard.readText()).trim();
+    if (!$('link').value) note('The clipboard is empty. Copy the call link first.');
+  } catch {
+    $('link').focus();
+    note('The browser didn\'t allow reading the clipboard. Paste the link into the field yourself: Ctrl+V.');
+  }
+};
+
+$('quit').onclick = async () => {
+  try { await ask('quit'); } catch { /* gone already */ }
+  quitted = true;
+  shut();
+  for (const b of document.querySelectorAll('button')) b.disabled = true;
+  say('The program has quit. You can close this tab.');
+};
+
+// Everyone who has the old link is left behind, so: two clicks.
+const NEW_LINK = $('newLink').textContent;
+let sure = 0;
+const calm = () => {
+  clearTimeout(sure);
+  sure = 0;
+  $('newLink').textContent = NEW_LINK;
+  $('newLink').className = 'danger';
+};
+$('newLink').onclick = async () => {
+  if (!sure) {
+    $('newLink').textContent = 'Sure? Press again';
+    $('newLink').className = 'danger sure';
+    sure = setTimeout(calm, 6000);
+    return;
+  }
+  calm();
+  try {
+    const r = await ask('new-link');
+    $('newLinkNote').textContent = r.ok ? 'Done: the next call will have a new link.' : 'Couldn\'t change the link: ' + r.error;
+  } catch {
+    $('newLinkNote').textContent = 'The program isn\'t responding. Start it again.';
+  }
+};
+</script>
+</body>
+</html>

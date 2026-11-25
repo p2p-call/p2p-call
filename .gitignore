@@ -1,0 +1,11 @@
+.idea/
+/p2p-call
+/dist/
+*.exe
+cloudflared*
+node_modules/
+
+/android/.gradle/
+/android/build/
+/android/app/build/
+photo_*.jpg

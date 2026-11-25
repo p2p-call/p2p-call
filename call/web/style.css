@@ -1,0 +1,269 @@
+:root {
+  --bg: #16161f;
+  --panel: #22222e;
+  --line: #33334a;
+  --text: #ececf1;
+  --muted: #9a9ab0;
+  --green: #3fb950;
+  --blue: #3b82f6;
+  --red: #e5534b;
+  --yellow: #d4a72c;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+main {
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 24px 16px 40px;
+}
+
+[hidden] { display: none !important; }
+
+h1 { font-size: 1.5em; margin: 24px 0; text-align: center; }
+
+label { display: block; margin-bottom: 6px; color: var(--muted); }
+
+input {
+  width: 100%;
+  padding: 12px 14px;
+  font: inherit;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+button {
+  font: inherit;
+  padding: 10px 16px;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  cursor: pointer;
+}
+button:disabled { opacity: .5; cursor: default; }
+button.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+button.danger { background: var(--red); border-color: var(--red); color: #fff; }
+button.small { padding: 4px 10px; font-size: .9em; }
+
+#joinBtn { width: 100%; margin-top: 16px; padding: 16px; font-size: 1.1em; }
+#backBtn { width: 100%; margin-top: 10px; padding: 12px; }
+
+.hint { color: var(--muted); font-size: .95em; }
+.hint.error { color: var(--red); }
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 16px;
+  display: grid;
+  gap: 10px;
+}
+.panel-title { font-weight: 600; }
+/* Without this a long line (a song's name) widens the panel past the screen. */
+.panel > * { min-width: 0; }
+
+.invite-row { display: flex; gap: 8px; margin-top: 6px; }
+.invite-row input { flex: 1; min-width: 0; font-size: .9em; padding: 8px 10px; }
+
+.banner {
+  background: #3a2f12;
+  border: 1px solid var(--yellow);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 16px;
+  font-size: .95em;
+}
+
+
+
+#endScreen { text-align: center; padding-top: 60px; }
+#endText { font-size: 1.15em; margin-bottom: 24px; }
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  max-width: calc(100% - 32px);
+  background: #000c;
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 10px;
+}
+
+.get-app {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 28px;
+  padding: 12px 14px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  color: var(--muted);
+  font-size: .95em;
+}
+.get-app > div { flex: 1; }
+.get-app-links { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 6px; }
+.get-app a, #openInApp a { color: var(--blue); font-weight: 600; }
+
+.music-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#musicPlayer { display: grid; gap: 8px; }
+#musicPlayer > * { min-width: 0; }
+.music-row { display: flex; align-items: center; gap: 10px; }
+.music-row button { flex: none; white-space: nowrap; }
+.music-time { flex: none; min-width: 2.6em; text-align: center; color: var(--muted); font-size: .9em; font-variant-numeric: tabular-nums; }
+.music-row input[type=range] { flex: 1; min-width: 0; padding: 0; border: 0; background: none; accent-color: var(--blue); }
+
+.quality { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: .95em; }
+select { font: inherit; padding: 8px 10px; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+
+/* The chat: over the call, the whole screen on a phone, a column on a wide one. */
+.chat { position: fixed; inset: 0; z-index: 15; background: rgba(0, 0, 0, .55); display: flex; justify-content: center; }
+.chat-box {
+  width: 100%; max-width: 520px; height: 100%; box-sizing: border-box; padding: 14px;
+  display: flex; flex-direction: column; gap: 10px; background: var(--bg);
+}
+@media (min-width: 700px) {
+  .chat { align-items: center; }
+  .chat-box { height: min(640px, 90vh); border: 1px solid var(--line); border-radius: 14px; }
+}
+.chat-head { display: flex; align-items: center; justify-content: space-between; }
+.chat-head button { padding: 6px 12px; }
+.chat-list { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 4px; overflow-wrap: anywhere; }
+.chat-msg { max-width: 85%; padding: 8px 12px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line); align-self: flex-start; }
+.chat-msg.mine { align-self: flex-end; background: #1e2f4d; border-color: #2c4a80; }
+.chat-who { display: block; color: var(--muted); font-size: .8em; }
+.chat-msg a { color: var(--blue); }
+.chat .invite-row { margin-top: 0; }
+.chat #chatEmpty { flex: 1; }
+.chat-new {
+  position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; box-sizing: border-box; padding: 0 5px;
+  border-radius: 9px; background: var(--red); color: #fff; font-size: 12px; line-height: 18px;
+}
+body.pip #chatPanel { display: none; }
+.hint.warn { color: var(--yellow); text-align: left; }
+
+/* ---------------------------------------------------------------- the call
+
+   The whole window: everybody as tiles, the buttons fixed at the bottom,
+   and between them, when asked for, the sheet with the link. */
+body.incall main { max-width: 1100px; padding: 0; }
+body.incall { overflow: hidden; }
+body.incall .get-app { display: none; }
+body.incall .toast { bottom: 96px; }
+#callScreen { height: 100vh; height: 100dvh; display: flex; flex-direction: column; }
+#callScreen > * { flex: none; }
+.top-line { display: flex; justify-content: space-between; gap: 10px; padding: 10px 16px 0; color: var(--muted); font-size: .9em; }
+#callScreen .banner { margin: 8px 12px 0; }
+#unlockAudio { margin: 8px 12px 0; padding: 14px; }
+#callScreen .panel { margin: 0 10px 8px; }
+
+#stage { flex: 1 1 0; min-height: 0; padding: 10px; display: flex; flex-direction: column; gap: 6px; position: relative; }
+#stageMain { flex: 1 1 0; min-height: 0; display: grid; gap: 6px; grid-auto-rows: minmax(0, 1fr); }
+#stage.many #stageMain { overflow-y: auto; grid-auto-rows: minmax(150px, 1fr); }
+/* With a screen shown, it takes the room and the people line up beneath it. */
+#stageStrip { flex: none; display: flex; gap: 6px; height: 96px; overflow-x: auto; }
+#stageStrip .tile { flex: 1 0 84px; max-width: 150px; }
+#stageStrip .avatar { width: 40px; font-size: 18px; }
+
+.tile {
+  position: relative; min-width: 0; min-height: 0; overflow: hidden; cursor: pointer;
+  display: grid; place-items: center;
+  background: var(--panel); border: 2px solid transparent; border-radius: 14px;
+  transition: border-color .15s;
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+}
+.tile.speaking { border-color: var(--blue); }
+.tile.screen { background: #000; }
+.tile video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.tile.screen video, .tile.big video { object-fit: contain; }
+.tile.mine:not(.screen):not(.back) video { transform: scaleX(-1); }
+.avatar {
+  width: clamp(44px, 32%, 104px); aspect-ratio: 1; border-radius: 50%;
+  display: grid; place-items: center; color: #fff; font-weight: 600; font-size: clamp(20px, 5vw, 42px);
+}
+.tile-name {
+  position: absolute; left: 6px; bottom: 6px; max-width: calc(100% - 12px);
+  padding: 2px 8px; border-radius: 8px; background: #000a; color: #fff; font-size: .8em;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tile-name.bad { color: #ffb4ae; }
+.tile-ic {
+  position: absolute; right: 6px; top: 6px; display: flex; align-items: center; gap: 5px;
+  padding: 2px 7px; border-radius: 8px; background: #000a; font-size: .8em;
+}
+.tile-ic:empty { display: none; }
+.q { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--green); }
+.q.mid { background: #d9a400; }
+.q.bad { background: var(--red); }
+.tile .flip { position: absolute; left: 6px; top: 6px; padding: 4px 10px; background: #000a; color: #fff; border-color: transparent; }
+/* Two in the call: the other one fills the stage, we sit in its corner. */
+.tile.corner { position: absolute; right: 18px; bottom: 18px; z-index: 2; width: 28%; max-width: 150px; aspect-ratio: 3 / 4; border-color: var(--bg); }
+.tile.corner .avatar { width: 44px; font-size: 20px; }
+/* Opened on the whole window. */
+.tile.big { position: fixed; inset: 0; z-index: 10; width: auto; max-width: none; aspect-ratio: auto; border-radius: 0; border: 0; }
+body.zoomed .tile.corner:not(.big) { display: none; }
+
+.bar {
+  display: flex; justify-content: center; gap: 18px;
+  padding: 10px 12px calc(12px + env(safe-area-inset-bottom, 0px));
+  background: #101018; border-top: 1px solid var(--line);
+}
+button.round { position: relative; width: 54px; height: 54px; padding: 0; border-radius: 50%; font-size: 22px; line-height: 1; }
+button.round.on { background: var(--blue); border-color: var(--blue); }
+button.round.off { background: var(--red); border-color: var(--red); }
+button.round.leave { width: 72px; border-radius: 27px; background: var(--red); border-color: var(--red); }
+button.round.leave.sure { outline: 3px solid #fff; }
+
+.sheet {
+  display: grid; gap: 10px; padding: 6px 14px 14px;
+  background: var(--panel); border-top: 1px solid var(--line); border-radius: 18px 18px 0 0;
+}
+.sheet > *, #hostOnly > *, #directNote > * { min-width: 0; }
+#hostOnly, #directNote, #inviteBox { display: grid; gap: 10px; }
+#linkSheet { max-height: 62%; overflow-y: auto; width: 100%; max-width: 520px; align-self: center; }
+.sheet-grip { justify-self: center; width: 44px; height: 5px; padding: 0; border: 0; border-radius: 3px; background: var(--line); }
+.sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+button.quiet { padding: 4px 6px; background: none; border: 0; color: var(--muted); }
+textarea.link {
+  width: 100%; resize: none; padding: 10px 12px; color: var(--text); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 12px;
+  font: 15px/1.4 ui-monospace, "SF Mono", Menlo, Consolas, monospace; word-break: break-all;
+}
+.sheet-row { display: flex; gap: 8px; }
+.sheet-row button { flex: 1; min-width: 0; font-weight: 600; }
+.sheet-status { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; font-size: .9em; }
+.sheet-status.bad { border-color: var(--red); }
+button.outline-danger { background: transparent; border-color: var(--red); color: var(--red); }
+button.outline-danger.danger { background: var(--red); color: #fff; }
+
+/* Over the call: the menu, and the sheet about one participant. */
+.over { position: fixed; inset: 0; z-index: 12; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; background: rgba(0, 0, 0, .55); }
+.over .sheet { width: 100%; max-width: 520px; padding-top: 14px; padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px)); }
+.menu { display: grid; width: min(320px, calc(100% - 24px)); margin-bottom: calc(92px + env(safe-area-inset-bottom, 0px)); padding: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
+.menu button { display: flex; justify-content: space-between; gap: 10px; padding: 12px; text-align: left; background: none; border: 0; border-radius: 10px; }
+.menu button + button, .menu .quality { border-top: 1px solid var(--line); border-radius: 0; }
+.menu .quality { padding: 8px 12px; margin: 0; color: var(--text); }
+
+/* The Android app as a small window over other apps: the pictures only,
+   the others' first. */
+body.pip #stage { position: fixed; inset: 0; z-index: 20; padding: 0; background: #000; }
+body.pip #stageMain { grid-template-columns: 1fr !important; }
+body.pip .tile { border-radius: 0; border: 0; }
+body.pip #stage:has(.tile.has-video) .tile:not(.has-video) { display: none; }
+body.pip #stage:has(.tile.has-video:not(.mine)) .tile.mine { display: none; }
+body.pip .tile-name, body.pip .tile-ic, body.pip .flip, body.pip .toast, body.pip .over { display: none; }

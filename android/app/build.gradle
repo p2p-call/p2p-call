@@ -1,0 +1,84 @@
+plugins {
+    id "com.android.application"
+}
+
+// The signing key comes from the build (GitHub Actions secrets). Without it
+// the APK is signed with a throwaway debug key: fine to try out, but it can't
+// be installed over a properly signed one.
+def keystore = System.getenv("KEYSTORE_FILE")
+
+// Where the site and the releases are: the one file the program and the
+// pages read too.
+def conf = new groovy.json.JsonSlurper().parse(file("../../call/web/site.json"))
+def site = new URI(conf.site)
+
+android {
+    namespace "io.github.p2pcall"
+    compileSdk 35
+
+    defaultConfig {
+        applicationId conf.app
+        minSdk 26
+        // 34, not 35: from 35 on the system draws the app under the status
+        // bar, and the call page isn't laid out for that.
+        targetSdk 34
+        versionCode((System.getenv("VERSION_CODE") ?: "1") as int)
+        versionName(System.getenv("VERSION_NAME") ?: "dev")
+        buildConfigField "String", "SITE_HOST", "\"${site.host}\""
+        buildConfigField "String", "SITE_PATH", "\"${site.path}\""
+        buildConfigField "String", "REPO", "\"${conf.repo}\""
+        manifestPlaceholders = [siteHost: site.host, sitePath: site.path.replaceAll('/$', '')]
+    }
+
+    signingConfigs {
+        release {
+            if (keystore) {
+                storeFile file(keystore)
+                storeType "pkcs12"
+                storePassword System.getenv("KEYSTORE_PASS")
+                keyAlias "p2pcall"
+                keyPassword System.getenv("KEYSTORE_PASS")
+                // All the signature kinds, old and new: some phones' installers
+                // (Xiaomi's) are picky about which ones are there.
+                enableV1Signing true
+                enableV2Signing true
+                enableV3Signing true
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig keystore ? signingConfigs.release : signingConfigs.debug
+        }
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+
+    // The site's pages (docs/: the permanent link's page and the call page)
+    // go into the app, which shows them from there instead of from GitHub
+    // (sitePage in MainActivity).
+    sourceSets {
+        main {
+            assets.srcDirs += ["../../docs"]
+        }
+    }
+}
+
+dependencies {
+    // The call server, built from ../mobile by `gomobile bind` (see the workflow).
+    implementation files("libs/call.aar")
+}

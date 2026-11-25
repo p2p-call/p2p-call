@@ -1,0 +1,155 @@
+# Builds the app for Windows, Mac, Linux and the Android app,
+# and publishes them to GitHub Releases.
+# Runs when a tag like v0.1.0 is pushed:
+#   git tag v0.1.0 && git push origin v0.1.0
+# The Run workflow button in the Actions tab only builds, no release
+# (the files end up in the run's artifacts).
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  desktop:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Tests
+        run: go test -race ./...
+
+      - name: Build
+        env:
+          CGO_ENABLED: "0"
+        run: |
+          set -eu
+          mkdir -p dist work
+          # The app knows its version so it can offer updates.
+          case "$GITHUB_REF" in
+            refs/tags/v*) version="$GITHUB_REF_NAME" ;;
+            *) version=dev ;;
+          esac
+          build() { # GOOS GOARCH file-name
+            GOOS=$1 GOARCH=$2 go build -trimpath -ldflags "-s -w -X main.version=$version" -o "work/$3" .
+          }
+
+          build windows amd64 p2p-call.exe
+          mv work/p2p-call.exe dist/p2p-call-windows-x64.exe
+
+          # Mac: a zip keeps the executable bit; a bare file downloaded by a browser loses it.
+          for arch in arm64 amd64; do
+            name=$([ $arch = arm64 ] && echo apple-silicon || echo intel)
+            build darwin $arch p2p-call
+            (cd work && zip -q "../dist/p2p-call-mac-$name.zip" p2p-call && rm p2p-call)
+          done
+
+          for arch in amd64 arm64; do
+            name=$([ $arch = amd64 ] && echo x64 || echo arm64)
+            build linux $arch p2p-call
+            tar -czf "dist/p2p-call-linux-$name.tar.gz" -C work p2p-call
+            rm work/p2p-call
+          done
+          ls -l dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop
+          path: dist/*
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+
+      # The call server (Go) is turned into a library for Android.
+      - name: Call server for Android (gomobile)
+        run: |
+          set -eu
+          export ANDROID_NDK_HOME="$ANDROID_NDK_LATEST_HOME"
+          go install golang.org/x/mobile/cmd/gomobile@latest
+          go get golang.org/x/mobile/bind@latest
+          gomobile init
+          gomobile bind -target=android/arm64,android/arm -androidapi 26 \
+            -ldflags "-s -w" -o android/app/libs/call.aar ./mobile
+
+      - name: APK
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+          KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASS }}
+          VERSION_CODE: ${{ github.run_number }}
+        run: |
+          set -eu
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/signing.p12"
+            export KEYSTORE_FILE="$RUNNER_TEMP/signing.p12"
+          else
+            echo "::warning::No signing key (secrets KEYSTORE_B64, KEYSTORE_PASS): the APK is signed with a throwaway key and won't update over the next build."
+          fi
+          case "$GITHUB_REF" in
+            refs/tags/v*) export VERSION_NAME="${GITHUB_REF_NAME#v}" ;;
+            *) export VERSION_NAME="0.0.$VERSION_CODE" ;;
+          esac
+          cd android
+          gradle --no-daemon assembleRelease
+          mkdir -p ../dist
+          cp app/build/outputs/apk/release/app-release.apk ../dist/p2p-call-android.apk
+          ls -l ../dist
+
+      # What the phone will see on install: signature, Android versions, alignment.
+      - name: Check APK
+        run: |
+          bt=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          "$bt/apksigner" verify --verbose --print-certs dist/p2p-call-android.apk
+          "$bt/aapt2" dump badging dist/p2p-call-android.apk | grep -E "^(package|sdkVersion|targetSdkVersion|native-code)"
+          "$bt/zipalign" -c -P 16 -v 4 dist/p2p-call-android.apk | tail -3
+          unzip -lv dist/p2p-call-android.apk | grep -E "\.so|Stored|Defl" | grep "\.so"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: dist/*
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [desktop, android]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          (cd dist && sha256sum * > SHA256SUMS.txt)
+          # A tag with a hyphen (v0.1.0-test1) is a pre-release.
+          pre=""; case "$GITHUB_REF_NAME" in *-*) pre="--prerelease" ;; esac
+          gh release create "$GITHUB_REF_NAME" dist/* $pre \
+            --title "p2p-call $GITHUB_REF_NAME" \
+            --notes-file .github/release-notes.md

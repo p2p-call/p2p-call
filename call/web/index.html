@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark">
+  <title>Voice call</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<main>
+  <!-- Before joining: a name, and the tap that lets the browser use the microphone. -->
+  <section id="joinScreen">
+    <h1>Voice call</h1>
+    <label for="name">What’s your name?</label>
+    <input id="name" maxlength="32" autocomplete="nickname" placeholder="Name">
+    <button id="joinBtn" class="primary">🎙 Join call</button>
+    <button id="backBtn" hidden>← Back</button>
+    <p id="joinHint" class="hint"></p>
+    <p id="tunnelWarn" class="hint warn" hidden>
+      ⚠ This page came not from the call website but through the tunnel <b id="tunnelHost"></b>, a third-party server
+      the host used to open the call. The conversation is direct and encrypted, but in theory the tunnel
+      could swap the page itself and listen in that way. Safer: open this link in the p2p-call app
+      ("Join a call") or ask the host for a permanent link.
+    </p>
+    <p id="openInApp" class="hint" hidden>
+      Have the p2p-call app? <a id="openInAppLink" href="#">Open the call there</a> —
+      you can talk with the phone held to your ear.
+    </p>
+    <p id="inAppHint" class="hint" hidden>
+      Looks like this link opened inside another app (Telegram, Instagram…).
+      If the microphone doesn’t turn on, open it in your regular browser:
+      menu <b>⋮</b> or <b>…</b> → "Open in browser".
+    </p>
+  </section>
+
+  <!-- The call: everybody is a tile, the buttons stay at the bottom, and
+       everything about the call itself (the link above all) is in a sheet
+       that slides away once there is somebody to talk to. -->
+  <section id="callScreen" hidden>
+    <div class="top-line">
+      <span id="count"></span>
+      <span id="lockedNote" hidden>🔒 call locked</span>
+    </div>
+    <div id="banner" class="banner" hidden></div>
+    <div id="strangers" class="banner" hidden></div>
+    <button id="unlockAudio" class="primary" hidden>🔊 Turn on sound</button>
+
+    <!-- Everybody in the call, ourselves included, and the screens shown. -->
+    <div id="stage"></div>
+
+    <!-- A song from this device, played to everyone in the call. -->
+    <div id="musicPanel" class="panel" hidden>
+      <input id="musicFile" type="file" accept="audio/*" hidden>
+      <div id="musicPlayer" hidden>
+        <div id="musicName" class="music-name"></div>
+        <div class="music-row">
+          <span id="musicPos" class="music-time">0:00</span>
+          <input id="musicSeek" type="range" min="0" max="1000" value="0" title="Seek">
+          <span id="musicDur" class="music-time">0:00</span>
+        </div>
+        <div class="music-row">
+          <button id="musicPause"></button>
+          <span>🔉</span>
+          <input id="musicVol" type="range" min="0" max="100" value="50" title="Music volume">
+          <button id="musicStop" title="Stop music">✕</button>
+        </div>
+      </div>
+      <div id="musicNote" class="hint" hidden></div>
+    </div>
+
+    <!-- The link to the call, and for the organizer what only they can do. -->
+    <div id="linkSheet" class="sheet" hidden>
+      <button id="linkHide" class="sheet-grip" title="Collapse"></button>
+      <div class="sheet-head">
+        <span id="linkTitle" class="panel-title">Invite friends</span>
+        <button id="linkClose" class="quiet">⌄ hide</button>
+      </div>
+      <div id="inviteWait" class="hint">The link will appear in a few seconds…</div>
+      <div id="inviteBox" hidden>
+        <textarea id="inviteLink" class="link" rows="3" readonly spellcheck="false"></textarea>
+        <div class="sheet-row">
+          <button id="copyBtn" class="primary">Copy link</button>
+          <button id="shareBtn" hidden>Share</button>
+        </div>
+      </div>
+      <div id="hostOnly" hidden>
+        <div id="onceNote" class="hint" hidden>One-time link: it stops working after this call.</div>
+        <div id="directNote" hidden>
+          <div class="hint">This link points straight to your tunnel. If the address changes, a new one appears here right away —
+            send it to anyone who hasn’t joined yet. People already in the call don’t need to do anything.</div>
+          <div class="sheet-status">
+            <span id="tunnelState">Address not checked</span>
+            <button id="checkBtn" class="small">↻ Check</button>
+          </div>
+          <div class="sheet-row"><button id="moveBtn">Reconnect tunnel</button></div>
+        </div>
+        <div class="sheet-row">
+          <button id="lockBtn"></button>
+          <button id="endAllBtn" class="outline-danger">End call for everyone</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="bar">
+      <button id="muteBtn" class="round" title="Microphone"></button>
+      <button id="camBtn" class="round" title="Camera">📷</button>
+      <button id="moreBtn" class="round" title="More">⋯<span id="chatNew" class="chat-new" hidden></span></button>
+      <button id="leaveBtn" class="round leave" title="Leave">📞</button>
+    </div>
+  </section>
+
+  <!-- What is needed less often: opened with ⋯. -->
+  <div id="morePanel" class="over" hidden>
+    <div id="moreMenu" class="menu">
+      <button id="chatBtn">💬 Chat<span id="chatCount" class="hint"></span></button>
+      <button id="linkBtn">🔗 Call link</button>
+      <button id="screenBtn" hidden>🖥 Share screen</button>
+      <button id="musicBtn">🎵 Play music for everyone</button>
+      <button id="speakerBtn" hidden></button>
+      <label id="qualityRow" class="quality" hidden>
+        My video quality
+        <select id="quality">
+          <option value="high">High (720p)</option>
+          <option value="mid">Medium (480p)</option>
+          <option value="low">Low (240p)</option>
+        </select>
+      </label>
+    </div>
+  </div>
+
+  <!-- One participant: how the connection to them is doing, and for the
+       organizer what can be done about them. Opened by holding their tile. -->
+  <div id="personPanel" class="over" hidden>
+    <div class="sheet">
+      <div class="sheet-head">
+        <span id="personName" class="panel-title"></span>
+        <button id="personClose" class="quiet">✕</button>
+      </div>
+      <div id="personInfo" class="hint"></div>
+      <div class="sheet-row"><button id="personZoom">Full screen</button></div>
+      <div id="personHost" class="sheet-row" hidden>
+        <button id="personMute">Mute</button>
+        <button id="personKick" class="outline-danger">Remove</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- A few words and links, from page to page; kept nowhere. Opened with
+       the 💬 button, over the call. -->
+  <div id="chatPanel" class="chat" hidden>
+    <div class="chat-box">
+      <div class="chat-head">
+        <span class="panel-title">Chat</span>
+        <button id="chatClose" title="Close">✕</button>
+      </div>
+      <div id="chatList" class="chat-list"></div>
+      <div id="chatEmpty" class="hint">No messages yet. Everyone in the call can see them, including people who join while it lasts. Nothing is stored: leave and they’re gone.</div>
+      <div class="invite-row">
+        <input id="chatText" maxlength="2000" autocomplete="off" placeholder="Message or link">
+        <button id="chatSend" title="Send">➤</button>
+      </div>
+    </div>
+  </div>
+
+  <section id="endScreen" hidden>
+    <p id="endText"></p>
+    <button id="againBtn" class="primary">Rejoin</button>
+    <p id="endNote" class="hint" hidden>The desktop app will close by itself in a minute and a half unless you rejoin.
+      Closing this tab does the same. Friends already in the call can keep talking, but no one new can join.</p>
+  </section>
+
+  <!-- For guests: where to get the program, to host calls of their own. -->
+  <aside id="getApp" class="get-app" hidden>
+    <div>
+      <div id="getAppText"></div>
+      <div id="getAppLinks" class="get-app-links"></div>
+    </div>
+    <button id="getAppClose" class="small" title="Hide">✕</button>
+  </aside>
+</main>
+
+<div id="audios" hidden></div>
+<div id="toast" class="toast" hidden></div>
+
+<!-- One program in parts; they share their names, so the order matters. -->
+<script src="app.js"></script>
+<script src="link.js"></script>
+<script src="meet.js"></script>
+<script src="peers.js"></script>
+<script src="music.js"></script>
+<script src="chat.js"></script>
+<script src="video.js"></script>
+<script src="bridge.js"></script>
+<script src="ui.js"></script>
+</body>
+</html>

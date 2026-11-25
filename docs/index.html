@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
+<title>Voice call</title>
+<style>
+  body {
+    margin: 0; min-height: 100vh; display: grid; place-items: center;
+    background: #16161f; color: #ececf1;
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 440px; padding: 24px; text-align: center; }
+  .logo { width: 88px; height: 88px; margin: 0 auto 20px; border-radius: 50%; background: #1f8a5b; display: grid; place-items: center; font-size: 40px; }
+  h1 { font-size: 1.5em; margin: 0 0 12px; }
+  p { color: #9a9ab0; margin: 8px 0; }
+  .dots::after { content: ""; animation: dots 1.5s steps(4, end) infinite; }
+  @keyframes dots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75% { content: "..."; } }
+  a { color: #3b82f6; }
+  label { display: block; margin: 28px 0 6px; color: #9a9ab0; }
+  input {
+    width: 100%; box-sizing: border-box; padding: 12px 14px; font: inherit; text-align: center;
+    color: #ececf1; background: #22222e; border: 1px solid #33334a; border-radius: 10px;
+  }
+  button, .button {
+    display: block; width: 100%; box-sizing: border-box; margin-top: 12px; padding: 14px; font: inherit; font-weight: 600;
+    color: #fff; background: #3b82f6; border: 0; border-radius: 10px; text-decoration: none; cursor: pointer;
+  }
+  .button.quiet { background: #22222e; border: 1px solid #33334a; color: #ececf1; font-weight: 400; }
+  .small { font-size: .9em; }
+  #make { margin-top: 20px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<!-- The permanent link to somebody's call leads here. The call itself is
+     hosted on the organizer's own device, behind an address that changes;
+     this page finds the address of the moment and sends the visitor there.
+     It is all this page does: no call data passes through it. -->
+<main>
+  <div class="logo">📞</div>
+  <h1 id="title">Voice call</h1>
+  <p id="text" class="dots">Looking for the call</p>
+  <p id="more"></p>
+  <!-- The name is asked here, once: this page's address never changes, so it
+       can remember it; the call page's address is new every time. -->
+  <div id="who">
+    <label for="name">Your name in the call</label>
+    <input id="name" maxlength="32" autocomplete="nickname" placeholder="Name">
+    <button id="enter" hidden>Join call</button>
+  </div>
+  <!-- A call can be created right here: it needs no program, the
+       participants' pages find each other by themselves (see c1/meet.js,
+       "a call with no server"). -->
+  <div id="make" hidden>
+    <button id="makeOnce">Start call</button>
+    <p class="small">With a one-time link: it stops working after a day, or when you end the call for everyone.</p>
+    <button id="makeMine" class="button quiet">Start with a permanent link</button>
+    <p class="small">The link stays the same until this browser's site data is cleared.</p>
+  </div>
+  <a id="inApp" class="button quiet" hidden>Open in the p2p-call app</a>
+  <button id="back" class="button quiet" hidden>← Back</button>
+</main>
+<script>
+'use strict';
+// Where the notice board is, and what the app is called, is written down
+// beside the call page (c1/site.json) — once for the pages, the organizer's
+// program and the app.
+const conf = fetch('c1/site.json').then((r) => r.json()).then((c) => {
+  // (Tried out on this computer, the page can be pointed at a board of its own.)
+  try { if (location.hostname === 'localhost' && sessionStorage.getItem('sm.board')) { c.board = sessionStorage.getItem('sm.board'); c.spare = sessionStorage.getItem('sm.spare') ? [sessionStorage.getItem('sm.spare')] : []; } } catch { /* private mode */ }
+  return c;
+});
+// The link's tail: name.secret — a call hosted by somebody's program, to be
+// looked up on the board; or name~secret(~when it runs out) — a call with
+// no server, whose pages meet by themselves. The secret never leaves the
+// browser: what is shown to the board and to the organizer's program is
+// made from it, and can't be turned back into it.
+const tail = location.hash.slice(1);
+const WORD = /^[A-Za-z0-9_-]{22}$/;
+const hosted = tail.includes('.');
+const [room, secret = '', until = ''] = tail.split(hosted ? '.' : '~');
+const meet = !hosted && WORD.test(secret);
+const app = window.AndroidApp;   // set when this page is shown inside the Android app
+const nameBox = document.getElementById('name');
+const stored = (() => { try { return localStorage.getItem('name') || ''; } catch { return ''; } })();
+nameBox.value = (app && app.getName && app.getName()) || stored;
+nameBox.oninput = () => { try { localStorage.setItem('name', nameBox.value.trim()); } catch { /* private mode */ } };
+if (app) document.getElementById('who').hidden = true;   // the app keeps the name itself
+// Inside the app this page may wait for a call for as long as it takes, so
+// there has to be a way back to the app's start screen.
+if (app && app.callEnded) {
+  const back = document.getElementById('back');
+  back.onclick = () => app.callEnded('You left the call.');
+  back.hidden = false;
+}
+
+// On Android the call can be handed to the app, if it is installed. A page
+// can't see whether it is, so this is only an offer.
+if (/Android/.test(navigator.userAgent) && !app && WORD.test(room)) {
+  conf.then((c) => {
+    const a = document.getElementById('inApp');
+    a.href = `intent://room/${tail}#Intent;scheme=p2pcall;package=${c.app};end`;
+    a.hidden = false;
+  }).catch(() => {});
+}
+
+let found = '';   // the call's address, once it is known to be there
+let speaks = 1;   // which call page (c<N>/) the organizer's program speaks to
+function enter() {
+  const name = nameBox.value.trim();
+  if (meet) {
+    say('Joining', '', true);
+    return location.replace('c1/#' + new URLSearchParams({ r: room, b: secret, x: parseInt(until, 36) || 0, n: name }));
+  }
+  if (app && !(app.canSitePage && app.canSitePage())) {
+    // The app from before would refuse this site's page the microphone.
+    return say('This call needs a newer version of the app.',
+      'Press "Back", then "Update available" on the first screen. Or open the link in a browser.');
+  }
+  say('Joining', '', true);
+  // The call page lives here, on this site; it reaches the organizer's
+  // program across the tunnel and seals what it says to it.
+  location.replace(`c${speaks}/#` + new URLSearchParams({ r: room, s: found, k: secret, n: name }));
+}
+document.getElementById('enter').onclick = enter;
+nameBox.onkeydown = (e) => { if (e.key === 'Enter' && (found || meet)) enter(); };
+
+// A new call with no server. Its name is the fingerprint of a key made
+// here; the key stays in this browser and makes its holder the organizer.
+// The secret seals what the pages say to each other on the board.
+async function make(permanent) {
+  say('Starting the call', '', true);
+  const url = (b64) => b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const b64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)));
+  let mine = null;
+  if (permanent) { try { mine = JSON.parse(localStorage.getItem('p2p.mine') || 'null'); } catch { /* none yet */ } }
+  try {
+    if (!mine) {
+      const pair = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
+      const pub = await crypto.subtle.exportKey('raw', pair.publicKey);
+      mine = {
+        room: url(b64(new Uint8Array(await crypto.subtle.digest('SHA-256', pub)).slice(0, 16))),
+        secret: url(b64(crypto.getRandomValues(new Uint8Array(16)))),
+        // A one-time link lasts a day at most.
+        exp: permanent ? 0 : Math.floor(Date.now() / 1000) + 24 * 3600,
+      };
+      const key = JSON.stringify({ jwk: await crypto.subtle.exportKey('jwk', pair.privateKey), pub: b64(pub) });
+      (permanent ? localStorage : sessionStorage).setItem('p2p.host.' + mine.room, key);
+      if (permanent) localStorage.setItem('p2p.mine', JSON.stringify(mine));
+    }
+  } catch (e) {
+    return say('Couldn\'t start the call.', 'This browser doesn\'t let the page store anything. Try a normal window, not a private one.');
+  }
+  location.replace('c1/#' + new URLSearchParams({ r: mine.room, b: mine.secret, x: mine.exp, n: nameBox.value.trim() }));
+}
+document.getElementById('makeOnce').onclick = () => make(false);
+document.getElementById('makeMine').onclick = () => make(true);
+
+const say = (text, more, busy) => {
+  document.getElementById('text').textContent = text;
+  document.getElementById('text').className = busy ? 'dots' : '';
+  document.getElementById('more').textContent = more || '';
+};
+
+// What the link's secret gives (the program's side is identity.go): the
+// board's name for the call, the key its notices are sealed with, and the
+// word to say at the door. The secret itself goes nowhere.
+// (The same code, down to "end of the shared code", lives in docs/index.html
+// and call/web/link.js; a test keeps them alike.)
+async function doorKeys(room, secret) {
+  const raw = Uint8Array.from(atob(secret.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
+  const base = await crypto.subtle.importKey('raw', raw, 'HKDF', false, ['deriveKey', 'deriveBits']);
+  const from = (purpose) => ({ name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(0), info: new TextEncoder().encode(`p2p-call door ${purpose}|${room}`) });
+  const word = async (purpose) => btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.deriveBits(from(purpose), base, 128))))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return {
+    key: await crypto.subtle.deriveKey(from('key'), base, { name: 'AES-GCM', length: 256 }, false, ['decrypt']),
+    topic: 'p2pcall_' + await word('topic'),
+    pass: await word('pass'),
+  };
+}
+let doorOnce = null;
+const door = () => doorOnce || (doorOnce = doorKeys(far.room, far.pass));
+
+// The spare boards are public MQTT servers: the same notices go there too,
+// so that one board being down, or having had enough of this address for
+// today, doesn't keep people out. What they are shown is what the first
+// board is shown — sealed, and under a name made from the link's secret.
+// This is all of their language that is needed: listen to one name, say
+// under it, and keep the line from going quiet. heard(text, kept): kept —
+// said before we came, the server's one remembered message.
+function mqttOpen(url, topic, heard) {
+  const enc = new TextEncoder();
+  const str = (s) => { const b = enc.encode(s); return [b.length >> 8, b.length & 255, ...b]; };
+  const packet = (head, body) => {
+    const len = [];
+    let n = body.length;
+    do { const d = n % 128; n = Math.floor(n / 128); len.push(n ? d | 128 : d); } while (n);
+    const out = new Uint8Array(1 + len.length + body.length);
+    out[0] = head;
+    out.set(len, 1);
+    out.set(body, 1 + len.length);
+    return out;
+  };
+  const ws = new WebSocket(url, 'mqtt');
+  ws.binaryType = 'arraybuffer';
+  let buf = new Uint8Array(0), beat = 0;
+  const line = {
+    ready: false, onready: null, onclose: null,
+    say(text, keep) {
+      if (!line.ready || ws.readyState !== 1) return false;
+      ws.send(packet(keep ? 0x31 : 0x30, [...str(topic), ...enc.encode(text)]));
+      return true;
+    },
+    close() { line.onclose = null; clearInterval(beat); ws.close(); },
+  };
+  ws.onopen = () => ws.send(packet(0x10, [...str('MQTT'), 4, 2, 0, 60,
+    ...str('p' + Array.from(crypto.getRandomValues(new Uint8Array(8)), (b) => b.toString(16).padStart(2, '0')).join(''))]));
+  ws.onmessage = (e) => {
+    // A packet may come in pieces, or several at once.
+    const add = new Uint8Array(e.data), all = new Uint8Array(buf.length + add.length);
+    all.set(buf);
+    all.set(add, buf.length);
+    buf = all;
+    for (;;) {
+      let i = 1, n = 0, m = 1, d;
+      do {
+        if (i >= buf.length) return;
+        if (i > 4) return ws.close();
+        d = buf[i++];
+        n += (d & 127) * m;
+        m *= 128;
+      } while (d & 128);
+      if (n > 300000) return ws.close();
+      if (buf.length < i + n) return;
+      const head = buf[0], body = buf.slice(i, i + n);
+      buf = buf.slice(i + n);
+      if (head >> 4 === 2) {            // let in: now listen to our name
+        if (body[1] !== 0) return ws.close();
+        ws.send(packet(0x82, [0, 1, ...str(topic), 0]));
+        beat = setInterval(() => { if (ws.readyState === 1) ws.send(Uint8Array.of(0xc0, 0)); }, 30000);
+      } else if (head >> 4 === 9) {     // listening
+        line.ready = true;
+        if (line.onready) line.onready();
+      } else if (head >> 4 === 3) {     // somebody said something
+        const name = (body[0] << 8) | body[1];
+        try { heard(new TextDecoder().decode(body.subarray(2 + name)), !!(head & 1)); } catch { /* not ours */ }
+      }
+    }
+  };
+  ws.onclose = () => { clearInterval(beat); line.ready = false; if (line.onclose) line.onclose(); };
+  return line;
+}
+
+// What a spare board remembers under the name: a list of texts, or null if
+// the board couldn't be reached.
+function spareRead(url, topic) {
+  return new Promise((done) => {
+    const got = [];
+    let line = null, over = false;
+    const finish = (ok) => {
+      if (over) return;
+      over = true;
+      if (line) line.close();
+      done(ok ? got : null);
+    };
+    try { line = mqttOpen(url, topic, (text) => got.push(text)); } catch { return finish(false); }
+    // The remembered message comes right after the board starts listening.
+    line.onready = () => setTimeout(() => finish(true), 700);
+    line.onclose = () => finish(false);
+    setTimeout(() => finish(false), 6000);
+  });
+}
+
+// Reads the organizer's latest notice from the boards: { u: the call's
+// address ("" — the call is over), t: when it was posted }, or null if there
+// is none. c — where the boards are (site.json). The notices are sealed with
+// the key from the link's secret. Whoever has the link can write there too,
+// so only notices signed with the key the link names (room is that key's
+// fingerprint) count.
+async function lookup(c, room, keys) {
+  const newest = async (texts, best) => {
+    for (const text of texts) {
+      try {
+        const all = Uint8Array.from(atob(text), (ch) => ch.charCodeAt(0));
+        const n = JSON.parse(new TextDecoder().decode(
+          await crypto.subtle.decrypt({ name: 'AES-GCM', iv: all.slice(0, 12) }, keys.key, all.slice(12))));
+        if ((!best || n.t > best.t) && await genuine(room, n)) best = { u: n.u, t: n.t, v: n.v };
+      } catch { /* not ours */ }
+    }
+    return best;
+  };
+  const spare = (c.spare || []).map((url) => spareRead(url, keys.topic));
+  let best = null, failed = false;
+  try {
+    const r = await fetch(`${c.board}/${keys.topic}/json?poll=1&since=12h`, { cache: 'no-store' });
+    if (!r.ok) throw new Error('board ' + r.status);
+    const texts = [];
+    for (const line of (await r.text()).split('\n')) {
+      try {
+        const ev = JSON.parse(line);
+        if (ev.event === 'message') texts.push(ev.message);
+      } catch { /* an empty line */ }
+    }
+    best = await newest(texts, null);
+  } catch (e) {
+    failed = true;
+  }
+  // The first board knows where the call is: no need to wait for the others.
+  if (best && best.u) return best;
+  const others = await Promise.all(spare);
+  if (failed && others.every((o) => o === null)) throw new Error('no board answers');
+  return newest(others.flat().filter((text) => text !== null), best);
+}
+
+async function genuine(room, n) {
+  // (An address on this very computer is taken only by a page that is itself
+  // being tried out there.)
+  const here = location.hostname === 'localhost' && /^http:\/\/localhost:\d+$/.test(n.u);
+  if (typeof n.u !== 'string' || typeof n.t !== 'number' || !(here || /^(https:\/\/[a-z0-9.-]+)?$/.test(n.u))) return false;
+  // v — which call page speaks to the organizer's program — is signed too.
+  // A signed notice can be kept and put up again later, so an old one
+  // doesn't count.
+  if (!Number.isInteger(n.v) || n.v < 1 || Math.abs(Date.now() / 1000 - n.t) > 24 * 3600) return false;
+  const pub = Uint8Array.from(atob(n.k), (c) => c.charCodeAt(0));
+  const print = new Uint8Array(await crypto.subtle.digest('SHA-256', pub)).slice(0, 16);
+  const name = btoa(String.fromCharCode(...print)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  if (name !== room) return false;
+  const key = await crypto.subtle.importKey('raw', pub, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
+  return crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, key, Uint8Array.from(atob(n.s), (c) => c.charCodeAt(0)),
+    new TextEncoder().encode(`p2p-call|${n.u}|${n.t}|${n.v}`));
+}
+
+// end of the shared code
+
+// Is the call really behind this address, and alive? (An organizer whose
+// device died never got to say the call was over.)
+async function alive(u) {
+  try {
+    const ctl = new AbortController();
+    setTimeout(() => ctl.abort(), 8000);
+    const r = await fetch(u + '/hello.json', { cache: 'no-store', signal: ctl.signal });
+    return r.ok && (await r.json()).room === room;
+  } catch {
+    return false;
+  }
+}
+
+let keys = null;
+async function look() {
+  try {
+    const n = await lookup(await conf, room, await (keys || (keys = doorKeys(room, secret))));
+    if (n && n.u && await alive(n.u)) {
+      found = n.u;
+      speaks = n.v;
+      // Straight in if the name is known; otherwise it is asked first.
+      if (app || nameBox.value.trim()) return enter();
+      say('The call is on.', 'Enter your name. You won\'t be asked again next time.');
+      document.getElementById('enter').hidden = false;
+      nameBox.focus();
+      return;
+    }
+    say('The call isn\'t on right now.', 'As soon as the host starts it, this page will open it. You can leave it open.');
+  } catch (e) {
+    say('Can\'t tell whether the call is on.', 'Check your internet connection. The page will try again by itself.');
+  }
+  setTimeout(look, 6000);
+}
+
+const packs = !!window.CompressionStream;   // a call with no server needs it; the others don't
+if (!window.crypto || !crypto.subtle || ((meet || !tail || tail === 'create') && !packs)) {
+  say('This browser is too old for calls.', 'Open the link in Chrome, Safari or Firefox.');
+} else if (tail === 'create') {
+  make(false);          // "create a call" in the app or the program leads here
+} else if (!tail) {
+  say('Start a call right here, or open a link someone sent you.', 'Audio and video go directly between participants. Nothing to install.');
+  document.getElementById('make').hidden = false;
+} else if (!WORD.test(room) || !WORD.test(secret) || (hosted && until)) {
+  say('This page is for joining a call by link.', 'The link you followed is incomplete. Ask the host to send it again.');
+} else if (meet) {
+  if (until && Date.now() / 1000 > parseInt(until, 36)) {
+    say('This link no longer works.', 'It was for one call only. Ask the host for a new one.');
+  } else if (app || nameBox.value.trim()) {
+    enter();
+  } else {
+    say('Call at this link.', 'Enter your name. You won\'t be asked again next time.');
+    document.getElementById('enter').hidden = false;
+    nameBox.focus();
+  }
+} else {
+  look();
+}
+</script>
+</body>
+</html>
