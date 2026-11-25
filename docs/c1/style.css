@@ -267,3 +267,28 @@ body.pip .tile { border-radius: 0; border: 0; }
 body.pip #stage:has(.tile.has-video) .tile:not(.has-video) { display: none; }
 body.pip #stage:has(.tile.has-video:not(.mine)) .tile.mine { display: none; }
 body.pip .tile-name, body.pip .tile-ic, body.pip .flip, body.pip .toast, body.pip .over { display: none; }
+
+/* A computer's window: the call uses all of it, the menus sit by their
+   buttons instead of covering the call, the link is a card in the corner
+   and the chat a column at the side. */
+@media (min-width: 900px) {
+  main { padding-top: 10vh; }
+  body.incall main { max-width: none; padding: 0; }
+  #stage { padding: 12px 16px 4px; gap: 10px; }
+  #stageMain, #stageStrip { gap: 10px; }
+  #stageStrip { height: 120px; }
+  #stageStrip .tile { max-width: 200px; }
+  .bar { background: transparent; border-top: 0; padding: 12px 16px 16px; }
+  .tile.corner { width: 22%; max-width: 280px; aspect-ratio: 16 / 9; }
+  #linkSheet {
+    position: fixed; left: 16px; bottom: 96px; z-index: 5; width: 420px; max-width: calc(100% - 32px); max-height: calc(100% - 120px);
+    border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 10px 30px rgba(0, 0, 0, .45); padding-top: 12px;
+  }
+  #linkSheet .sheet-grip { display: none; }
+  .over { background: transparent; }
+  .menu { box-shadow: 0 10px 30px rgba(0, 0, 0, .45); }
+  .over .sheet { width: 420px; margin-bottom: 96px; border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 10px 30px rgba(0, 0, 0, .45); }
+  .chat { background: transparent; justify-content: flex-end; align-items: stretch; pointer-events: none; }
+  body.incall:has(#chatPanel:not([hidden])) #stage { margin-right: 376px; }
+  .chat-box { pointer-events: auto; width: 360px; height: auto; margin: 12px 16px 96px 0; border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 10px 30px rgba(0, 0, 0, .45); }
+}
