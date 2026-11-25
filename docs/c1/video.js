@@ -198,6 +198,35 @@ const tiles = new Map();   // a participant's id, or "id:screen" -> { el, video,
 let bigTile = '';          // the tile opened on the whole window, if any
 const wideWindow = window.matchMedia('(min-width: 700px)');
 if (wideWindow.addEventListener) wideWindow.addEventListener('change', () => renderVideos());
+// A computer's window: tiles keep a camera's shape and, all the same size,
+// are laid out as large as the stage allows, in the middle of it.
+const deskWindow = window.matchMedia('(min-width: 900px)');
+if (deskWindow.addEventListener) deskWindow.addEventListener('change', () => renderVideos());
+if (window.ResizeObserver) new ResizeObserver(() => fitTiles()).observe(document.getElementById('stage'));
+
+function fitTiles() {
+  const main = $('stageMain');
+  if (!main) return;
+  const n = [...main.children].filter((e) => !e.classList.contains('corner')).length, stage = $('stage');
+  const free = deskWindow.matches && n > 0 && !stage.classList.contains('screens');
+  main.classList.toggle('fit', free);
+  if (!free) { main.style.gridAutoRows = ''; main.style.justifyContent = main.style.alignContent = ''; return; }
+  const W = main.clientWidth, H = main.clientHeight, gap = 10, shape = 16 / 9;
+  let best = 0, cols = 1;
+  for (let c = 1; c <= n; c++) {
+    const rows = Math.ceil(n / c);
+    const w = Math.min((W - gap * (c - 1)) / c, (H - gap * (rows - 1)) / rows * shape);
+    if (w > best) { best = w; cols = c; }
+  }
+  // Too many to fit at a useful size: two columns' worth and scroll.
+  const scroll = best < 220;
+  if (scroll) { cols = Math.max(1, Math.floor((W + gap) / (220 + gap))); best = (W - gap * (cols - 1)) / cols; }
+  best = Math.floor(best);
+  main.style.gridTemplateColumns = `repeat(${cols}, ${best}px)`;
+  main.style.gridAutoRows = `${Math.floor(best / shape)}px`;
+  main.style.justifyContent = 'center';
+  main.style.alignContent = scroll ? 'start' : 'center';
+}
 
 const stagePart = (id) => {
   let el = $(id);
@@ -337,6 +366,8 @@ function renderVideos() {
   main.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
   strip.hidden = !screens;
   $('stage').classList.toggle('many', !screens && people > (wide ? 12 : 6));
+  $('stage').classList.toggle('screens', !!screens);
+  fitTiles();
 
   const { camera, screen } = state.videos;
   $('camBtn').classList.toggle('on', !!camera);
